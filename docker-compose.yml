@@ -1,0 +1,55 @@
+# Sobe banco + backend + frontend com um comando: `docker compose up --build`
+# Frontend referenciado pelo caminho relativo ../money-track-front
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: money-track-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-moneytrack}
+      POSTGRES_USER: ${POSTGRES_USER:-moneytrack}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-moneytrack}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-moneytrack} -d ${POSTGRES_DB:-moneytrack}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: money-track-back
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-moneytrack}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-moneytrack}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-moneytrack}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:-change-me-please-use-a-long-random-secret-at-least-32-bytes}
+      APP_JWT_EXPIRATION_HOURS: ${APP_JWT_EXPIRATION_HOURS:-168}
+      APP_SEED_USER: ${APP_SEED_USER:-admin}
+      APP_SEED_PASSWORD: ${APP_SEED_PASSWORD:-changeme}
+      APP_CORS_ORIGINS: ${APP_CORS_ORIGINS:-http://localhost:5173}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+
+  frontend:
+    build:
+      context: ../money-track-front
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+    container_name: money-track-front
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+
+volumes:
+  db_data:

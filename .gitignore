@@ -1,3 +1,13 @@
+# Build output
+target/
+
+# Env e segredos
+.env
+
+# IDE
+.idea/
+*.iml
+
 # Compiled class file
 *.class
 
