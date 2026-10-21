@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
@@ -53,6 +54,56 @@ public class ReservaService {
         BigDecimal amount = currentEntry(userId, cat.getId()).map(Entry::getAmount).orElse(ZERO);
         int days = month.lengthOfMonth();
         return new ReservaResponse(cat.getId(), amount, month.toString(), days, dailyBudget(amount, days));
+    }
+
+    /** Painel do lancamento rapido (antes de lancar) para a data informada. */
+    public ReservaStatus status(Long userId, LocalDate date) {
+        Category cat = requireReservaCategory(userId);
+        YearMonth month = YearMonth.from(date);
+        BigDecimal reserva = currentEntry(userId, cat.getId()).map(Entry::getAmount).orElse(ZERO);
+        BigDecimal spent = spentInMonth(userId, cat.getId(), month);
+        int days = month.lengthOfMonth();
+        int remainingDays = days - date.getDayOfMonth() + 1;
+        BigDecimal remainingMonth = reserva.subtract(spent);
+        BigDecimal daily = remainingDays > 0
+                ? remainingMonth.divide(BigDecimal.valueOf(remainingDays), 2, RoundingMode.HALF_UP)
+                : remainingMonth;
+        return new ReservaStatus(reserva, days, remainingDays, spent, remainingMonth, daily);
+    }
+
+    /** Lanca um gasto rapido (despesa UNICO na reserva). Retorna o status atualizado. */
+    @Transactional
+    public ReservaStatus quickGasto(Long userId, BigDecimal amount, LocalDate date, String description) {
+        if (amount == null || amount.signum() <= 0) {
+            throw ApiException.badRequest("Valor do gasto deve ser maior que zero");
+        }
+        Category cat = requireReservaCategory(userId);
+        YearMonth month = YearMonth.from(date);
+
+        Entry e = new Entry();
+        e.setUserId(userId);
+        e.setCategoryId(cat.getId());
+        e.setType(EntryType.DESPESA);
+        String desc = description == null || description.isBlank() ? "Gasto rapido" : description.trim();
+        e.setDescription(desc);
+        e.setAmount(amount.setScale(2, RoundingMode.HALF_UP));
+        e.setRecurrence(Recurrence.UNICO);
+        e.setStartMonth(month.atDay(1));
+        e.setEndMonth(month.atDay(1));
+        entries.save(e);
+
+        return status(userId, date);
+    }
+
+    private BigDecimal spentInMonth(Long userId, Long categoryId, YearMonth month) {
+        BigDecimal total = ZERO;
+        for (Entry e : entries.findByUserIdAndCategoryId(userId, categoryId)) {
+            if (e.getRecurrence() == Recurrence.UNICO
+                    && YearMonth.from(e.getStartMonth()).equals(month)) {
+                total = total.add(e.getAmount());
+            }
+        }
+        return total;
     }
 
     @Transactional

@@ -1,11 +1,17 @@
 package com.moneytrack.reserva;
 
+import com.moneytrack.common.ApiException;
 import com.moneytrack.common.Months;
 import com.moneytrack.security.AuthContext;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.time.DateTimeException;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 
@@ -35,5 +41,37 @@ public class ReservaController {
         YearMonth view = month == null ? YearMonth.now(zone) : Months.parse(month);
         YearMonth from = req.fromMonth() == null ? view : Months.parse(req.fromMonth());
         return service.set(AuthContext.currentUserId(), req.amount(), from, view);
+    }
+
+    /** Painel do lancamento rapido para a data (default: hoje). */
+    @GetMapping("/status")
+    public ReservaStatus status(@RequestParam(required = false) String date) {
+        return service.status(AuthContext.currentUserId(), parseDate(date));
+    }
+
+    /** Lanca um gasto rapido (despesa que consome a reserva). */
+    @PostMapping("/gastos")
+    public ReservaStatus gasto(@Valid @RequestBody GastoRequest req) {
+        return service.quickGasto(AuthContext.currentUserId(), req.amount(),
+                parseDate(req.date()), req.description());
+    }
+
+    private LocalDate parseDate(String date) {
+        if (date == null || date.isBlank()) {
+            return LocalDate.now(zone);
+        }
+        try {
+            return LocalDate.parse(date.trim());
+        } catch (DateTimeException ex) {
+            throw ApiException.badRequest("Data invalida '" + date + "' (use YYYY-MM-DD)");
+        }
+    }
+
+    public record GastoRequest(
+            @NotNull(message = "Valor e obrigatorio")
+            @DecimalMin(value = "0.01", message = "Valor deve ser maior que zero")
+            BigDecimal amount,
+            String date,
+            String description) {
     }
 }

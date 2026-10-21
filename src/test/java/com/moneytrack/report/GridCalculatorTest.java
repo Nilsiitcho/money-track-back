@@ -93,6 +93,35 @@ class GridCalculatorTest {
         assertThat(mercado.values()).containsExactly(bd("800.00"), bd("0.00"), bd("0.00"));
     }
 
+    @Test
+    void reservaBudgetAndExcessLines() {
+        YearMonth aug = YearMonth.of(2026, 8);
+        YearMonth oct = YearMonth.of(2026, 10);
+        Long reservaCat = 9L;
+
+        List<Entry> entries = List.of(
+                // orcamento FIXO 1200 desde agosto
+                entry(10L, EntryType.DESPESA, "1200.00", Recurrence.FIXO, aug, null, reservaCat),
+                // gastos rapidos de outubro: 1000 + 500 = 1500 -> excedente 300
+                entry(11L, EntryType.DESPESA, "1000.00", Recurrence.UNICO, oct, oct, reservaCat),
+                entry(12L, EntryType.DESPESA, "500.00", Recurrence.UNICO, oct, oct, reservaCat));
+        Map<Long, String> names = Map.of(reservaCat, "Reserva");
+        Map<Long, String> kinds = Map.of(reservaCat, "RESERVA");
+
+        GridResponse g = GridCalculator.build(entries, Map.of(), names, kinds, oct, 3, Set.of());
+
+        var reserva = g.despesas().stream().filter(c -> "RESERVA".equals(c.kind())).findFirst().orElseThrow();
+        assertThat(reserva.values()).containsExactly(bd("1200.00"), bd("1200.00"), bd("1200.00"));
+
+        var excedente = g.despesas().stream().filter(c -> "RESERVA_EXCESS".equals(c.kind())).findFirst().orElseThrow();
+        assertThat(excedente.values()).containsExactly(bd("300.00"), bd("0.00"), bd("0.00"));
+
+        // totais contam R + excedente (nao os rapidos crus)
+        assertThat(g.totalDespesas()).containsExactly(bd("1500.00"), bd("1200.00"), bd("1200.00"));
+        // acumulado inclui base ago+set (-1200 cada) e corre pela janela
+        assertThat(g.accumulated()).containsExactly(bd("-3900.00"), bd("-5100.00"), bd("-6300.00"));
+    }
+
     private Entry parcela(Long id, String amount, YearMonth start, Long categoryId) {
         Entry e = entry(id, EntryType.DESPESA, amount, Recurrence.PARCELADO, start, start.plusMonths(2), categoryId);
         e.setInstallmentFirst(1);
