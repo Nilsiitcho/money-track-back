@@ -46,6 +46,8 @@ public final class GridCalculator {
         // Valores mes a mes por lancamento, com metadados da 1a ocorrencia na janela.
         Map<Long, BigDecimal[]> entryValues = new LinkedHashMap<>();
         Map<Long, EntryMeta> entryMeta = new HashMap<>();
+        // Mes da ultima parcela de despesas parceladas (fim da divida), quando na janela.
+        Map<Long, String> entryFinalMonth = new HashMap<>();
 
         for (int idx = 0; idx < months; idx++) {
             List<Occurrence> occ = OccurrenceCalculator.occurrencesIn(entries, overrides, cols.get(idx));
@@ -54,6 +56,10 @@ public final class GridCalculator {
                         entryValues.get(o.entryId())[idx].add(o.amount());
                 entryMeta.computeIfAbsent(o.entryId(),
                         k -> new EntryMeta(o.type(), o.categoryId(), o.description(), o.recurrence()));
+                if (o.type() == EntryType.DESPESA && o.recurrence() == Recurrence.PARCELADO
+                        && o.installmentNumber() != null && o.installmentNumber().equals(o.installmentTotal())) {
+                    entryFinalMonth.put(o.entryId(), cols.get(idx).toString());
+                }
             }
         }
 
@@ -91,7 +97,7 @@ public final class GridCalculator {
             if (meta.categoryId() == null) {
                 boolean receita = meta.type() == EntryType.RECEITA;
                 GridResponse.EntryRow self =
-                        new GridResponse.EntryRow(entryId, meta.description(), Arrays.asList(values));
+                        new GridResponse.EntryRow(entryId, meta.description(), Arrays.asList(values), entryFinalMonth.get(entryId));
                 (receita ? recSingles : despSingles).add(new GridResponse.CategoryRow(
                         null, meta.description(), "SINGLE", Arrays.asList(values), List.of(self)));
                 if (visible) {
@@ -106,7 +112,7 @@ public final class GridCalculator {
             if (reservaCatId != null && reservaCatId.equals(meta.categoryId())) {
                 if (meta.recurrence() == Recurrence.FIXO) {
                     // orcamento da reserva (linha "Reserva"): display sempre, counted so se visivel
-                    reservaBudgetRows.add(new GridResponse.EntryRow(entryId, meta.description(), Arrays.asList(values)));
+                    reservaBudgetRows.add(new GridResponse.EntryRow(entryId, meta.description(), Arrays.asList(values), entryFinalMonth.get(entryId)));
                     for (int idx = 0; idx < months; idx++) {
                         reservaBudgetDisplay[idx] = reservaBudgetDisplay[idx].add(values[idx]);
                         if (visible) {
@@ -128,7 +134,7 @@ public final class GridCalculator {
             BigDecimal[] total = receita ? totRec : totDesp;
 
             entryTarget.computeIfAbsent(meta.categoryId(), k -> new ArrayList<>())
-                    .add(new GridResponse.EntryRow(entryId, meta.description(), Arrays.asList(values)));
+                    .add(new GridResponse.EntryRow(entryId, meta.description(), Arrays.asList(values), entryFinalMonth.get(entryId)));
 
             BigDecimal[] catRow = catTarget.computeIfAbsent(meta.categoryId(), k -> newRow(months));
             if (visible) {

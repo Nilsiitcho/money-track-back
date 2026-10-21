@@ -23,7 +23,11 @@ public record GridResponse(
     public record CategoryRow(Long categoryId, String name, String kind, List<BigDecimal> values, List<EntryRow> entries) {
     }
 
-    /** Lancamento individual dentro de uma categoria, com seus valores mes a mes. */
-    public record EntryRow(Long entryId, String label, List<BigDecimal> values) {
+    /**
+     * Lancamento individual dentro de uma categoria, com seus valores mes a mes.
+     * {@code finalMonth} (YYYY-MM) marca a ultima parcela de uma DESPESA parcelada
+     * quando ela cai na janela (para comemorar o fim da divida); null caso contrario.
+     */
+    public record EntryRow(Long entryId, String label, List<BigDecimal> values, String finalMonth) {
     }
 }

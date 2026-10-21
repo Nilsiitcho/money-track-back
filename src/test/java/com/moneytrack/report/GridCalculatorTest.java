@@ -159,6 +159,18 @@ class GridCalculatorTest {
         assertThat(g.totalDespesas()).containsExactly(bd("250.00"), bd("0.00"));
     }
 
+    @Test
+    void parceladoMarksFinalMonthOnLastInstallment() {
+        YearMonth oct = YearMonth.of(2026, 10);
+        List<Entry> entries = List.of(parcela(1L, "200.00", oct, 2L)); // PARCELADO 3x out-dez
+        Map<Long, String> names = Map.of(2L, "Mercado");
+
+        GridResponse g = GridCalculator.build(entries, Map.of(), names, Map.of(), oct, 3, Set.of());
+
+        var e = g.despesas().get(0).entries().get(0);
+        assertThat(e.finalMonth()).isEqualTo("2026-12"); // ultima parcela (3/3)
+    }
+
     private Entry parcela(Long id, String amount, YearMonth start, Long categoryId) {
         Entry e = entry(id, EntryType.DESPESA, amount, Recurrence.PARCELADO, start, start.plusMonths(2), categoryId);
         e.setInstallmentFirst(1);
