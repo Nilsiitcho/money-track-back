@@ -13,6 +13,10 @@ import java.util.*;
 
 /**
  * Logica pura da tabela pivo (meses x categorias). Sem DB/Spring.
+ *
+ * Suporta simulacao: {@code excluded} lista ids de lancamentos a desconsiderar
+ * dos totais/saldo/acumulado. Os lancamentos ocultos continuam presentes nas
+ * linhas da categoria (com seus proprios valores) para poderem ser reexibidos.
  */
 public final class GridCalculator {
 
@@ -26,38 +30,70 @@ public final class GridCalculator {
             Map<Long, Map<YearMonth, EntryOverride>> overrides,
             Map<Long, String> names,
             YearMonth from,
-            int months) {
+            int months,
+            Set<Long> excluded) {
+
+        Set<Long> hidden = excluded == null ? Set.of() : excluded;
 
         List<YearMonth> cols = new ArrayList<>();
         for (int i = 0; i < months; i++) {
             cols.add(from.plusMonths(i));
         }
 
-        Map<Long, BigDecimal[]> receitas = new HashMap<>();
-        Map<Long, BigDecimal[]> despesas = new HashMap<>();
-        BigDecimal[] totRec = newRow(months);
-        BigDecimal[] totDesp = newRow(months);
-        BigDecimal[] saldo = newRow(months);
+        // Valores mes a mes por lancamento, com metadados da 1a ocorrencia na janela.
+        Map<Long, BigDecimal[]> entryValues = new LinkedHashMap<>();
+        Map<Long, EntryMeta> entryMeta = new HashMap<>();
 
         for (int idx = 0; idx < months; idx++) {
             List<Occurrence> occ = OccurrenceCalculator.occurrencesIn(entries, overrides, cols.get(idx));
             for (Occurrence o : occ) {
-                boolean receita = o.type() == EntryType.RECEITA;
-                Map<Long, BigDecimal[]> target = receita ? receitas : despesas;
-                target.computeIfAbsent(o.categoryId(), k -> newRow(months))[idx] =
-                        target.get(o.categoryId())[idx].add(o.amount());
-                if (receita) {
-                    totRec[idx] = totRec[idx].add(o.amount());
-                } else {
-                    totDesp[idx] = totDesp[idx].add(o.amount());
+                entryValues.computeIfAbsent(o.entryId(), k -> newRow(months))[idx] =
+                        entryValues.get(o.entryId())[idx].add(o.amount());
+                entryMeta.computeIfAbsent(o.entryId(),
+                        k -> new EntryMeta(o.type(), o.categoryId(), o.description()));
+            }
+        }
+
+        // Agrupa lancamentos por categoria (receita/despesa) e soma apenas os visiveis.
+        Map<Long, List<GridResponse.EntryRow>> recEntries = new HashMap<>();
+        Map<Long, List<GridResponse.EntryRow>> despEntries = new HashMap<>();
+        Map<Long, BigDecimal[]> recCat = new HashMap<>();
+        Map<Long, BigDecimal[]> despCat = new HashMap<>();
+        BigDecimal[] totRec = newRow(months);
+        BigDecimal[] totDesp = newRow(months);
+
+        for (Map.Entry<Long, BigDecimal[]> e : entryValues.entrySet()) {
+            Long entryId = e.getKey();
+            BigDecimal[] values = e.getValue();
+            EntryMeta meta = entryMeta.get(entryId);
+            boolean receita = meta.type() == EntryType.RECEITA;
+            boolean visible = !hidden.contains(entryId);
+
+            Map<Long, List<GridResponse.EntryRow>> entryTarget = receita ? recEntries : despEntries;
+            Map<Long, BigDecimal[]> catTarget = receita ? recCat : despCat;
+            BigDecimal[] total = receita ? totRec : totDesp;
+
+            entryTarget.computeIfAbsent(meta.categoryId(), k -> new ArrayList<>())
+                    .add(new GridResponse.EntryRow(entryId, meta.description(), Arrays.asList(values)));
+
+            BigDecimal[] catRow = catTarget.computeIfAbsent(meta.categoryId(), k -> newRow(months));
+            if (visible) {
+                for (int idx = 0; idx < months; idx++) {
+                    catRow[idx] = catRow[idx].add(values[idx]);
+                    total[idx] = total[idx].add(values[idx]);
                 }
             }
+        }
+
+        BigDecimal[] saldo = newRow(months);
+        for (int idx = 0; idx < months; idx++) {
             saldo[idx] = totRec[idx].subtract(totDesp[idx]);
         }
 
-        // acumulado comeca do acumulado real ate o mes anterior a janela
+        // acumulado comeca do acumulado real (sem os ocultos) ate o mes anterior a janela
+        List<Entry> visibleEntries = entries.stream().filter(en -> !hidden.contains(en.getId())).toList();
         BigDecimal[] acc = newRow(months);
-        BigDecimal running = BalanceCalculator.accumulatedUpTo(entries, overrides, from.minusMonths(1));
+        BigDecimal running = BalanceCalculator.accumulatedUpTo(visibleEntries, overrides, from.minusMonths(1));
         for (int idx = 0; idx < months; idx++) {
             running = running.add(saldo[idx]);
             acc[idx] = running;
@@ -65,8 +101,8 @@ public final class GridCalculator {
 
         return new GridResponse(
                 cols.stream().map(YearMonth::toString).toList(),
-                toRows(receitas, names),
-                toRows(despesas, names),
+                toRows(recCat, recEntries, names),
+                toRows(despCat, despEntries, names),
                 Arrays.asList(totRec),
                 Arrays.asList(totDesp),
                 Arrays.asList(saldo),
@@ -79,16 +115,34 @@ public final class GridCalculator {
         return row;
     }
 
-    private static List<GridResponse.CategoryRow> toRows(Map<Long, BigDecimal[]> map, Map<Long, String> names) {
+    private static List<GridResponse.CategoryRow> toRows(
+            Map<Long, BigDecimal[]> catValues,
+            Map<Long, List<GridResponse.EntryRow>> catEntries,
+            Map<Long, String> names) {
+
         List<GridResponse.CategoryRow> rows = new ArrayList<>();
-        for (Map.Entry<Long, BigDecimal[]> e : map.entrySet()) {
-            if (Arrays.stream(e.getValue()).noneMatch(v -> v.signum() != 0)) {
+        for (Map.Entry<Long, List<GridResponse.EntryRow>> e : catEntries.entrySet()) {
+            Long categoryId = e.getKey();
+            List<GridResponse.EntryRow> entries = e.getValue();
+            // mantem a categoria se algum lancamento (visivel ou oculto) tem valor
+            boolean anyValue = entries.stream()
+                    .flatMap(r -> r.values().stream())
+                    .anyMatch(v -> v.signum() != 0);
+            if (!anyValue) {
                 continue;
             }
+            entries.sort(Comparator.comparing(GridResponse.EntryRow::label, String.CASE_INSENSITIVE_ORDER));
             rows.add(new GridResponse.CategoryRow(
-                    e.getKey(), names.getOrDefault(e.getKey(), "?"), Arrays.asList(e.getValue())));
+                    categoryId,
+                    names.getOrDefault(categoryId, "?"),
+                    Arrays.asList(catValues.getOrDefault(categoryId, newRow(entries.get(0).values().size()))),
+                    entries));
         }
         rows.sort(Comparator.comparing(GridResponse.CategoryRow::name, String.CASE_INSENSITIVE_ORDER));
         return rows;
+    }
+
+    /** Metadados de um lancamento (tipo/categoria/descricao) para montar as linhas. */
+    private record EntryMeta(EntryType type, Long categoryId, String description) {
     }
 }

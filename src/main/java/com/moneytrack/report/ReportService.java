@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class ReportService {
@@ -18,10 +19,10 @@ public class ReportService {
         this.entryService = entryService;
     }
 
-    public GridResponse buildGrid(Long userId, YearMonth from, int months) {
+    public GridResponse buildGrid(Long userId, YearMonth from, int months, Set<Long> excluded) {
         List<Entry> entries = entryService.userEntries(userId);
         Map<Long, Map<YearMonth, EntryOverride>> overrides = entryService.overridesByEntry(entries);
         Map<Long, String> names = entryService.categoryNames(userId);
-        return GridCalculator.build(entries, overrides, names, from, months);
+        return GridCalculator.build(entries, overrides, names, from, months, excluded);
     }
 }

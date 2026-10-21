@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,9 +42,13 @@ class GridCalculatorTest {
                 entry(2L, EntryType.DESPESA, "800.00", Recurrence.UNICO, oct, oct, 2L));
         Map<Long, String> names = Map.of(1L, "Salario", 2L, "Mercado");
 
-        GridResponse g = GridCalculator.build(entries, Map.of(), names, oct, 3);
+        GridResponse g = GridCalculator.build(entries, Map.of(), names, oct, 3, Set.of());
 
         assertThat(g.months()).containsExactly("2026-10", "2026-11", "2026-12");
+
+        // categoria expõe seus lançamentos individuais
+        assertThat(g.receitas().get(0).entries()).hasSize(1);
+        assertThat(g.receitas().get(0).entries().get(0).entryId()).isEqualTo(1L);
 
         assertThat(g.receitas()).hasSize(1);
         assertThat(g.receitas().get(0).name()).isEqualTo("Salario");
@@ -60,6 +65,39 @@ class GridCalculatorTest {
 
         // acumulado parte do historico anterior: ago(5000)+set(5000)=10000, depois +saldo de cada coluna
         assertThat(g.accumulated()).containsExactly(bd("14200.00"), bd("19200.00"), bd("24200.00"));
+    }
+
+    @Test
+    void excludedEntryIsRemovedFromTotalsButStaysVisible() {
+        YearMonth aug = YearMonth.of(2026, 8);
+        YearMonth oct = YearMonth.of(2026, 10);
+
+        List<Entry> entries = List.of(
+                entry(1L, EntryType.RECEITA, "5000.00", Recurrence.FIXO, aug, null, 1L),
+                // compra simulada: parcelado 200 x3 a partir de outubro (cat 2)
+                parcela(2L, "200.00", oct, 2L),
+                entry(3L, EntryType.DESPESA, "800.00", Recurrence.UNICO, oct, oct, 2L));
+        Map<Long, String> names = Map.of(1L, "Salario", 2L, "Mercado");
+
+        GridResponse g = GridCalculator.build(entries, Map.of(), names, oct, 3, Set.of(2L));
+
+        // Mercado some do total o lançamento oculto (200), sobra só o de 800 em out
+        assertThat(g.totalDespesas()).containsExactly(bd("800.00"), bd("0.00"), bd("0.00"));
+        assertThat(g.saldo()).containsExactly(bd("4200.00"), bd("5000.00"), bd("5000.00"));
+
+        // mas o lançamento oculto continua listado (para poder reexibir), com seus valores
+        var mercado = g.despesas().stream().filter(c -> c.name().equals("Mercado")).findFirst().orElseThrow();
+        var oculto = mercado.entries().stream().filter(e -> e.entryId().equals(2L)).findFirst().orElseThrow();
+        assertThat(oculto.values()).containsExactly(bd("200.00"), bd("200.00"), bd("200.00"));
+        // o valor da categoria (visível) não conta o oculto
+        assertThat(mercado.values()).containsExactly(bd("800.00"), bd("0.00"), bd("0.00"));
+    }
+
+    private Entry parcela(Long id, String amount, YearMonth start, Long categoryId) {
+        Entry e = entry(id, EntryType.DESPESA, amount, Recurrence.PARCELADO, start, start.plusMonths(2), categoryId);
+        e.setInstallmentFirst(1);
+        e.setInstallmentTotal(3);
+        return e;
     }
 
     private BigDecimal bd(String v) {

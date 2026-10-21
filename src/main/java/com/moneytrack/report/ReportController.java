@@ -10,6 +10,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/report")
@@ -29,9 +33,22 @@ public class ReportController {
     @GetMapping("/grid")
     public GridResponse grid(
             @RequestParam(required = false) String from,
-            @RequestParam(defaultValue = "12") int months) {
+            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) String exclude) {
         YearMonth start = from == null ? YearMonth.now(zone) : Months.parse(from);
         int cols = Math.max(1, Math.min(months, 24));
-        return service.buildGrid(AuthContext.currentUserId(), start, cols);
+        return service.buildGrid(AuthContext.currentUserId(), start, cols, parseExclude(exclude));
+    }
+
+    /** Converte "1,2,3" (ids de lancamentos a ocultar na simulacao) em conjunto. */
+    private static Set<Long> parseExclude(String exclude) {
+        if (exclude == null || exclude.isBlank()) {
+            return Set.of();
+        }
+        return Arrays.stream(exclude.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(Long::valueOf)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 }
