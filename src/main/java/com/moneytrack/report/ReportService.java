@@ -23,6 +23,7 @@ public class ReportService {
         List<Entry> entries = entryService.userEntries(userId);
         Map<Long, Map<YearMonth, EntryOverride>> overrides = entryService.overridesByEntry(entries);
         Map<Long, String> names = entryService.categoryNames(userId);
-        return GridCalculator.build(entries, overrides, names, from, months, excluded);
+        Map<Long, String> kinds = entryService.categoryKinds(userId);
+        return GridCalculator.build(entries, overrides, names, kinds, from, months, excluded);
     }
 }

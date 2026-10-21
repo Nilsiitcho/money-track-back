@@ -42,7 +42,7 @@ class GridCalculatorTest {
                 entry(2L, EntryType.DESPESA, "800.00", Recurrence.UNICO, oct, oct, 2L));
         Map<Long, String> names = Map.of(1L, "Salario", 2L, "Mercado");
 
-        GridResponse g = GridCalculator.build(entries, Map.of(), names, oct, 3, Set.of());
+        GridResponse g = GridCalculator.build(entries, Map.of(), names, Map.of(), oct, 3, Set.of());
 
         assertThat(g.months()).containsExactly("2026-10", "2026-11", "2026-12");
 
@@ -79,7 +79,7 @@ class GridCalculatorTest {
                 entry(3L, EntryType.DESPESA, "800.00", Recurrence.UNICO, oct, oct, 2L));
         Map<Long, String> names = Map.of(1L, "Salario", 2L, "Mercado");
 
-        GridResponse g = GridCalculator.build(entries, Map.of(), names, oct, 3, Set.of(2L));
+        GridResponse g = GridCalculator.build(entries, Map.of(), names, Map.of(), oct, 3, Set.of(2L));
 
         // Mercado some do total o lançamento oculto (200), sobra só o de 800 em out
         assertThat(g.totalDespesas()).containsExactly(bd("800.00"), bd("0.00"), bd("0.00"));

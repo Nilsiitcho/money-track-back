@@ -38,6 +38,14 @@ public class EntryService {
         return map;
     }
 
+    public Map<Long, String> categoryKinds(Long userId) {
+        Map<Long, String> map = new HashMap<>();
+        for (Category c : categories.findByUserIdOrderByNameAsc(userId)) {
+            map.put(c.getId(), c.getKind().name());
+        }
+        return map;
+    }
+
     public List<Entry> userEntries(Long userId) {
         return entries.findByUserId(userId);
     }

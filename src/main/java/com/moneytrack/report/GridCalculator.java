@@ -29,11 +29,13 @@ public final class GridCalculator {
             List<Entry> entries,
             Map<Long, Map<YearMonth, EntryOverride>> overrides,
             Map<Long, String> names,
+            Map<Long, String> kinds,
             YearMonth from,
             int months,
             Set<Long> excluded) {
 
         Set<Long> hidden = excluded == null ? Set.of() : excluded;
+        Map<Long, String> catKinds = kinds == null ? Map.of() : kinds;
 
         List<YearMonth> cols = new ArrayList<>();
         for (int i = 0; i < months; i++) {
@@ -101,8 +103,8 @@ public final class GridCalculator {
 
         return new GridResponse(
                 cols.stream().map(YearMonth::toString).toList(),
-                toRows(recCat, recEntries, names),
-                toRows(despCat, despEntries, names),
+                toRows(recCat, recEntries, names, catKinds),
+                toRows(despCat, despEntries, names, catKinds),
                 Arrays.asList(totRec),
                 Arrays.asList(totDesp),
                 Arrays.asList(saldo),
@@ -118,7 +120,8 @@ public final class GridCalculator {
     private static List<GridResponse.CategoryRow> toRows(
             Map<Long, BigDecimal[]> catValues,
             Map<Long, List<GridResponse.EntryRow>> catEntries,
-            Map<Long, String> names) {
+            Map<Long, String> names,
+            Map<Long, String> kinds) {
 
         List<GridResponse.CategoryRow> rows = new ArrayList<>();
         for (Map.Entry<Long, List<GridResponse.EntryRow>> e : catEntries.entrySet()) {
@@ -135,6 +138,7 @@ public final class GridCalculator {
             rows.add(new GridResponse.CategoryRow(
                     categoryId,
                     names.getOrDefault(categoryId, "?"),
+                    kinds.getOrDefault(categoryId, "NORMAL"),
                     Arrays.asList(catValues.getOrDefault(categoryId, newRow(entries.get(0).values().size()))),
                     entries));
         }

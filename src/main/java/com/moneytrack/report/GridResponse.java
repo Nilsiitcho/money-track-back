@@ -20,7 +20,7 @@ public record GridResponse(
         List<BigDecimal> saldo,
         List<BigDecimal> accumulated
 ) {
-    public record CategoryRow(Long categoryId, String name, List<BigDecimal> values, List<EntryRow> entries) {
+    public record CategoryRow(Long categoryId, String name, String kind, List<BigDecimal> values, List<EntryRow> entries) {
     }
 
     /** Lancamento individual dentro de uma categoria, com seus valores mes a mes. */

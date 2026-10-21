@@ -23,9 +23,11 @@ public class CategoryService {
     }
 
     public List<Category> list(Long userId, boolean includeArchived) {
-        return includeArchived
+        List<Category> all = includeArchived
                 ? categories.findByUserIdOrderByNameAsc(userId)
                 : categories.findByUserIdAndArchivedFalseOrderByNameAsc(userId);
+        // Categorias especiais (ex.: Reserva de Gastos) sao geridas em aba propria.
+        return all.stream().filter(c -> c.getKind() == CategoryKind.NORMAL).toList();
     }
 
     public Category get(Long userId, Long id) {

@@ -24,6 +24,10 @@ public class Category {
     @Column(nullable = false)
     private String name;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private CategoryKind kind = CategoryKind.NORMAL;
+
     @Column(nullable = false)
     private boolean archived = false;
 
