@@ -122,6 +122,22 @@ class GridCalculatorTest {
         assertThat(g.accumulated()).containsExactly(bd("-3900.00"), bd("-5100.00"), bd("-6300.00"));
     }
 
+    @Test
+    void uncategorizedEntryBecomesSingleRow() {
+        YearMonth oct = YearMonth.of(2026, 10);
+        List<Entry> entries = List.of(
+                entry(1L, EntryType.DESPESA, "250.00", Recurrence.UNICO, oct, oct, null));
+
+        GridResponse g = GridCalculator.build(entries, Map.of(), Map.of(), Map.of(), oct, 2, Set.of());
+
+        var single = g.despesas().stream().filter(c -> "SINGLE".equals(c.kind())).findFirst().orElseThrow();
+        assertThat(single.categoryId()).isNull();
+        assertThat(single.name()).isEqualTo("x");
+        assertThat(single.values()).containsExactly(bd("250.00"), bd("0.00"));
+        assertThat(single.entries()).hasSize(1);
+        assertThat(g.totalDespesas()).containsExactly(bd("250.00"), bd("0.00"));
+    }
+
     private Entry parcela(Long id, String amount, YearMonth start, Long categoryId) {
         Entry e = entry(id, EntryType.DESPESA, amount, Recurrence.PARCELADO, start, start.plusMonths(2), categoryId);
         e.setInstallmentFirst(1);

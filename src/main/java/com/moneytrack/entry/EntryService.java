@@ -92,11 +92,12 @@ public class EntryService {
 
     @Transactional
     public Entry create(Long userId, EntryCreateRequest req) {
-        Category category = requireUsableCategory(userId, req.categoryId());
+        Long categoryId = req.categoryId() == null
+                ? null : requireUsableCategory(userId, req.categoryId()).getId();
 
         Entry e = new Entry();
         e.setUserId(userId);
-        e.setCategoryId(category.getId());
+        e.setCategoryId(categoryId);
         e.setType(req.type());
         e.setDescription(req.description().trim());
         e.setAmount(req.amount());
@@ -145,14 +146,15 @@ public class EntryService {
     @Transactional
     public Entry update(Long userId, Long id, EntryUpdateRequest req) {
         Entry entry = getRule(userId, id);
-        Category category = requireUsableCategory(userId, req.categoryId());
+        Long categoryId = req.categoryId() == null
+                ? null : requireUsableCategory(userId, req.categoryId()).getId();
 
         EditScope scope = resolveScope(entry, req.scope());
         YearMonth ref = resolveReferenceMonth(entry, scope, req.referenceMonth());
 
         List<EntryOverride> entryOverrides = overrides.findByEntryId(id);
         FieldValues values = new FieldValues(req.type(), req.description().trim(),
-                req.amount(), category.getId());
+                req.amount(), categoryId);
 
         EditPlan plan = RecurrenceEditor.edit(entry, entryOverrides, values, scope, ref);
 

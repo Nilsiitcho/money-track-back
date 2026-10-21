@@ -27,7 +27,8 @@ public class Entry {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(name = "category_id", nullable = false)
+    /** Categoria opcional. Null = lancamento sem categoria (linha unica na tabela). */
+    @Column(name = "category_id")
     private Long categoryId;
 
     @Enumerated(EnumType.STRING)

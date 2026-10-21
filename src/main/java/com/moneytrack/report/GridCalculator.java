@@ -76,11 +76,30 @@ public final class GridCalculator {
         BigDecimal[] reservaSpend = newRow(months);
         List<GridResponse.EntryRow> reservaBudgetRows = new ArrayList<>();
 
+        // Lancamentos sem categoria: cada um vira uma linha unica no seu grupo.
+        List<GridResponse.CategoryRow> recSingles = new ArrayList<>();
+        List<GridResponse.CategoryRow> despSingles = new ArrayList<>();
+
         for (Map.Entry<Long, BigDecimal[]> e : entryValues.entrySet()) {
             Long entryId = e.getKey();
             BigDecimal[] values = e.getValue();
             EntryMeta meta = entryMeta.get(entryId);
             boolean visible = !hidden.contains(entryId);
+
+            if (meta.categoryId() == null) {
+                boolean receita = meta.type() == EntryType.RECEITA;
+                GridResponse.EntryRow self =
+                        new GridResponse.EntryRow(entryId, meta.description(), Arrays.asList(values));
+                (receita ? recSingles : despSingles).add(new GridResponse.CategoryRow(
+                        null, meta.description(), "SINGLE", Arrays.asList(values), List.of(self)));
+                if (visible) {
+                    BigDecimal[] total = receita ? totRec : totDesp;
+                    for (int idx = 0; idx < months; idx++) {
+                        total[idx] = total[idx].add(values[idx]);
+                    }
+                }
+                continue;
+            }
 
             if (reservaCatId != null && reservaCatId.equals(meta.categoryId())) {
                 if (meta.recurrence() == Recurrence.FIXO) {
@@ -154,9 +173,15 @@ public final class GridCalculator {
             acc[idx] = running;
         }
 
-        // Despesas: categorias normais + linha Reserva + linha Excedente.
+        // Receitas: categorias normais + linhas unicas (sem categoria).
+        List<GridResponse.CategoryRow> receitasRows =
+                new ArrayList<>(toRows(recCat, recEntries, names, catKinds));
+        receitasRows.addAll(keepSingles(recSingles));
+
+        // Despesas: categorias normais + linhas unicas + linha Reserva + linha Excedente.
         List<GridResponse.CategoryRow> despesasRows =
                 new ArrayList<>(toRows(despCat, despEntries, names, catKinds));
+        despesasRows.addAll(keepSingles(despSingles));
         if (reservaCatId != null && hasBudget) {
             reservaBudgetRows.sort(Comparator.comparing(GridResponse.EntryRow::label, String.CASE_INSENSITIVE_ORDER));
             despesasRows.add(new GridResponse.CategoryRow(
@@ -171,12 +196,24 @@ public final class GridCalculator {
 
         return new GridResponse(
                 cols.stream().map(YearMonth::toString).toList(),
-                toRows(recCat, recEntries, names, catKinds),
+                receitasRows,
                 despesasRows,
                 Arrays.asList(totRec),
                 Arrays.asList(totDesp),
                 Arrays.asList(saldo),
                 Arrays.asList(acc));
+    }
+
+    /** Mantem apenas linhas unicas com algum valor; ordena por nome. */
+    private static List<GridResponse.CategoryRow> keepSingles(List<GridResponse.CategoryRow> singles) {
+        List<GridResponse.CategoryRow> out = new ArrayList<>();
+        for (GridResponse.CategoryRow r : singles) {
+            if (r.values().stream().anyMatch(v -> v.signum() != 0)) {
+                out.add(r);
+            }
+        }
+        out.sort(Comparator.comparing(GridResponse.CategoryRow::name, String.CASE_INSENSITIVE_ORDER));
+        return out;
     }
 
     /** Saldo de um mes aplicando a regra da Reserva (R + excedente), respeitando o olho. */

@@ -27,7 +27,6 @@ public record EntryUpdateRequest(
         @Digits(integer = 10, fraction = 2, message = "Valor invalido")
         BigDecimal amount,
 
-        @NotNull(message = "Categoria e obrigatoria")
         Long categoryId,
 
         EditScope scope,

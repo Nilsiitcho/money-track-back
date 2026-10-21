@@ -21,7 +21,6 @@ public record EntryCreateRequest(
         @Digits(integer = 10, fraction = 2, message = "Valor invalido")
         BigDecimal amount,
 
-        @NotNull(message = "Categoria e obrigatoria")
         Long categoryId,
 
         @NotNull(message = "Recorrencia e obrigatoria")
