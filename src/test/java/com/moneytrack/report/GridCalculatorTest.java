@@ -123,6 +123,27 @@ class GridCalculatorTest {
     }
 
     @Test
+    void hiddenReservaKeepsRowButDropsFromTotals() {
+        YearMonth aug = YearMonth.of(2026, 8);
+        YearMonth oct = YearMonth.of(2026, 10);
+        Long reservaCat = 9L;
+
+        List<Entry> entries = List.of(
+                entry(10L, EntryType.DESPESA, "1200.00", Recurrence.FIXO, aug, null, reservaCat));
+        Map<Long, String> names = Map.of(reservaCat, "Reserva");
+        Map<Long, String> kinds = Map.of(reservaCat, "RESERVA");
+
+        // oculta o orcamento da reserva (id 10)
+        GridResponse g = GridCalculator.build(entries, Map.of(), names, kinds, oct, 3, Set.of(10L));
+
+        // a linha Reserva continua presente com seus valores (para o estilo "desabilitado")
+        var reserva = g.despesas().stream().filter(c -> "RESERVA".equals(c.kind())).findFirst().orElseThrow();
+        assertThat(reserva.values()).containsExactly(bd("1200.00"), bd("1200.00"), bd("1200.00"));
+        // mas sai dos totais
+        assertThat(g.totalDespesas()).containsExactly(bd("0.00"), bd("0.00"), bd("0.00"));
+    }
+
+    @Test
     void uncategorizedEntryBecomesSingleRow() {
         YearMonth oct = YearMonth.of(2026, 10);
         List<Entry> entries = List.of(

@@ -72,7 +72,9 @@ public final class GridCalculator {
         BigDecimal[] totDesp = newRow(months);
 
         // Reserva: orcamento mensal (R) e gastos rapidos (S). Excedente = max(0, S-R).
-        BigDecimal[] reservaBudget = newRow(months);
+        // display = sempre (mantem a linha visivel mesmo oculta); counted = so visivel (totais).
+        BigDecimal[] reservaBudgetDisplay = newRow(months);
+        BigDecimal[] reservaBudgetCounted = newRow(months);
         BigDecimal[] reservaSpend = newRow(months);
         List<GridResponse.EntryRow> reservaBudgetRows = new ArrayList<>();
 
@@ -103,11 +105,12 @@ public final class GridCalculator {
 
             if (reservaCatId != null && reservaCatId.equals(meta.categoryId())) {
                 if (meta.recurrence() == Recurrence.FIXO) {
-                    // orcamento da reserva (linha "Reserva"); respeita o olho da simulacao
+                    // orcamento da reserva (linha "Reserva"): display sempre, counted so se visivel
                     reservaBudgetRows.add(new GridResponse.EntryRow(entryId, meta.description(), Arrays.asList(values)));
-                    if (visible) {
-                        for (int idx = 0; idx < months; idx++) {
-                            reservaBudget[idx] = reservaBudget[idx].add(values[idx]);
+                    for (int idx = 0; idx < months; idx++) {
+                        reservaBudgetDisplay[idx] = reservaBudgetDisplay[idx].add(values[idx]);
+                        if (visible) {
+                            reservaBudgetCounted[idx] = reservaBudgetCounted[idx].add(values[idx]);
                         }
                     }
                 } else {
@@ -136,20 +139,21 @@ public final class GridCalculator {
             }
         }
 
-        // Excedente da reserva + soma de reserva/excedente nas despesas.
+        // Excedente (vs orcamento real) + soma de reserva/excedente nas despesas.
         BigDecimal[] reservaExcess = newRow(months);
         boolean hasExcess = false;
         boolean hasBudget = false;
         for (int idx = 0; idx < months; idx++) {
-            BigDecimal exc = reservaSpend[idx].subtract(reservaBudget[idx]);
+            BigDecimal exc = reservaSpend[idx].subtract(reservaBudgetDisplay[idx]);
             if (exc.signum() > 0) {
                 reservaExcess[idx] = exc;
                 hasExcess = true;
             }
-            if (reservaBudget[idx].signum() != 0) {
+            if (reservaBudgetDisplay[idx].signum() != 0) {
                 hasBudget = true;
             }
-            totDesp[idx] = totDesp[idx].add(reservaBudget[idx]).add(reservaExcess[idx]);
+            // oculta a Reserva remove so o orcamento (counted) dos totais; excedente segue igual
+            totDesp[idx] = totDesp[idx].add(reservaBudgetCounted[idx]).add(reservaExcess[idx]);
         }
 
         BigDecimal[] saldo = newRow(months);
@@ -186,7 +190,7 @@ public final class GridCalculator {
             reservaBudgetRows.sort(Comparator.comparing(GridResponse.EntryRow::label, String.CASE_INSENSITIVE_ORDER));
             despesasRows.add(new GridResponse.CategoryRow(
                     reservaCatId, names.getOrDefault(reservaCatId, "Reserva"), "RESERVA",
-                    Arrays.asList(reservaBudget), reservaBudgetRows));
+                    Arrays.asList(reservaBudgetDisplay), reservaBudgetRows));
         }
         if (hasExcess) {
             despesasRows.add(new GridResponse.CategoryRow(
@@ -226,25 +230,29 @@ public final class GridCalculator {
 
         BigDecimal rec = ZERO;
         BigDecimal desp = ZERO;
-        BigDecimal budget = ZERO;
+        BigDecimal budgetDisplay = ZERO;
+        BigDecimal budgetCounted = ZERO;
         BigDecimal spend = ZERO;
         for (Occurrence o : OccurrenceCalculator.occurrencesIn(entries, overrides, month)) {
-            if (hidden.contains(o.entryId())) {
-                continue;
-            }
+            boolean oHidden = hidden.contains(o.entryId());
             if (reservaCatId != null && reservaCatId.equals(o.categoryId())) {
                 if (o.recurrence() == Recurrence.FIXO) {
-                    budget = budget.add(o.amount());
+                    budgetDisplay = budgetDisplay.add(o.amount());
+                    if (!oHidden) {
+                        budgetCounted = budgetCounted.add(o.amount());
+                    }
                 } else {
                     spend = spend.add(o.amount());
                 }
+            } else if (oHidden) {
+                // lancamentos normais respeitam o olho
             } else if (o.type() == EntryType.RECEITA) {
                 rec = rec.add(o.amount());
             } else {
                 desp = desp.add(o.amount());
             }
         }
-        BigDecimal reservaDesp = budget.add(spend.subtract(budget).max(ZERO)); // max(R, S)
+        BigDecimal reservaDesp = budgetCounted.add(spend.subtract(budgetDisplay).max(ZERO));
         return rec.subtract(desp).subtract(reservaDesp);
     }
 
