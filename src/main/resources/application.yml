@@ -33,7 +33,8 @@ springdoc:
     path: /swagger-ui.html
 
 server:
-  port: 8080
+  # Render (e outros PaaS) injetam a porta via env PORT; local usa 8080.
+  port: ${PORT:8080}
 
 ---
 spring:

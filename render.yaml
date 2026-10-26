@@ -1,0 +1,35 @@
+# Blueprint do Render para o backend (Docker). Postgres fica no Neon (externo).
+# Os segredos (sync: false) sao preenchidos no painel do Render, nao no repo.
+services:
+  - type: web
+    name: money-track-api
+    runtime: docker
+    repo: https://github.com/Nilsiitcho/money-track-back
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    autoDeploy: true
+    envVars:
+      # Conexao com o Neon (converter a connection string para JDBC):
+      #   jdbc:postgresql://<host>/<db>?sslmode=require
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      # Gere um segredo forte: openssl rand -base64 48
+      - key: APP_JWT_SECRET
+        sync: false
+      - key: APP_JWT_EXPIRATION_HOURS
+        value: "168"
+      # Usuario semente (login). Use uma senha forte, nao "changeme".
+      - key: APP_SEED_USER
+        sync: false
+      - key: APP_SEED_PASSWORD
+        sync: false
+      # Origem do frontend no Cloudflare Pages (ex.: https://money-track.pages.dev)
+      - key: APP_CORS_ORIGINS
+        sync: false
