@@ -153,8 +153,15 @@ public class ReservaService {
                 .findFirst();
     }
 
+    /** Retorna a categoria especial de reserva, criando-a se nao existir (ex.: apos reset). */
     private Category requireReservaCategory(Long userId) {
         return categories.findFirstByUserIdAndKind(userId, CategoryKind.RESERVA)
-                .orElseThrow(() -> ApiException.notFound("Categoria de reserva nao configurada"));
+                .orElseGet(() -> {
+                    Category c = new Category();
+                    c.setUserId(userId);
+                    c.setName("Reserva");
+                    c.setKind(CategoryKind.RESERVA);
+                    return categories.save(c);
+                });
     }
 }
