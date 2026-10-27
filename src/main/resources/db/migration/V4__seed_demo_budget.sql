@@ -1,13 +1,6 @@
 -- Seed demonstrativo: orcamento realista de ~3 anos (2026-2028) para o usuario 1.
--- Inclui receitas, despesas fixas, parceladas, unicas e uma categoria de Emprestimos.
--- Aditivo (nao remove dados existentes). Referencia categorias por nome.
-
--- Categoria especial de Emprestimos (se ainda nao existir).
-INSERT INTO category (user_id, name, kind)
-SELECT 1, 'Emprestimos', 'NORMAL'
-WHERE NOT EXISTS (
-    SELECT 1 FROM category WHERE user_id = 1 AND lower(name) = 'emprestimos'
-);
+-- Inclui receitas, despesas fixas, parceladas, unicas e emprestimos.
+-- Aditivo. Referencia categorias por nome (criadas em V3).
 
 -- Lancamentos. Colunas de v: categoria, tipo, descricao, valor, recorrencia,
 -- mes inicial, mes final, parcela inicial, total de parcelas.
