@@ -52,8 +52,10 @@ public class ReservaController {
     /** Lanca um gasto rapido (despesa que consome a reserva). */
     @PostMapping("/gastos")
     public ReservaStatus gasto(@Valid @RequestBody GastoRequest req) {
+        // Default: credito (entra no mes seguinte). Debito conta no mes atual.
+        boolean credit = req.credit() == null || req.credit();
         return service.quickGasto(AuthContext.currentUserId(), req.amount(),
-                parseDate(req.date()), req.description());
+                parseDate(req.date()), req.description(), credit);
     }
 
     private LocalDate parseDate(String date) {
@@ -72,6 +74,7 @@ public class ReservaController {
             @DecimalMin(value = "0.01", message = "Valor deve ser maior que zero")
             BigDecimal amount,
             String date,
-            String description) {
+            String description,
+            Boolean credit) {
     }
 }

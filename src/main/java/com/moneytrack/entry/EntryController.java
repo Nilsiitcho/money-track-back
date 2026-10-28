@@ -37,9 +37,15 @@ public class EntryController {
         Long userId = AuthContext.currentUserId();
         YearMonth ym = Months.parse(month);
         Map<Long, String> names = service.categoryNames(userId);
+        Map<Long, String> kinds = service.categoryKinds(userId);
         List<Occurrence> occ = service.occurrencesInMonth(userId, ym, type, categoryId, recurrence, q);
         return occ.stream()
-                .map(o -> OccurrenceResponse.of(o, names.get(o.categoryId())))
+                .map(o -> {
+                    // Gasto rapido = ocorrencia UNICO na categoria especial RESERVA.
+                    boolean quick = o.recurrence() == Recurrence.UNICO
+                            && "RESERVA".equals(kinds.get(o.categoryId()));
+                    return OccurrenceResponse.of(o, names.get(o.categoryId()), quick);
+                })
                 .toList();
     }
 
