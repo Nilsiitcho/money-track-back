@@ -51,7 +51,7 @@ public class ReservaService {
 
     public ReservaResponse get(Long userId, YearMonth month) {
         Category cat = requireReservaCategory(userId);
-        BigDecimal amount = currentEntry(userId, cat.getId()).map(Entry::getAmount).orElse(ZERO);
+        BigDecimal amount = activeAmount(currentEntry(userId, cat.getId()), month);
         int days = month.lengthOfMonth();
         return new ReservaResponse(cat.getId(), amount, month.toString(), days, dailyBudget(amount, days));
     }
@@ -60,7 +60,7 @@ public class ReservaService {
     public ReservaStatus status(Long userId, LocalDate date) {
         Category cat = requireReservaCategory(userId);
         YearMonth month = YearMonth.from(date);
-        BigDecimal reserva = currentEntry(userId, cat.getId()).map(Entry::getAmount).orElse(ZERO);
+        BigDecimal reserva = activeAmount(currentEntry(userId, cat.getId()), month);
         BigDecimal spent = spentInMonth(userId, cat.getId(), month);
         int days = month.lengthOfMonth();
         int remainingDays = days - date.getDayOfMonth() + 1;
@@ -119,9 +119,14 @@ public class ReservaService {
         } else if (existing.isPresent()) {
             Entry e = existing.get();
             e.setAmount(amount.setScale(2, RoundingMode.HALF_UP));
+            // Move o mes inicial apenas quando informado explicitamente (ex.: "a partir do proximo mes").
+            if (fromMonth != null) {
+                e.setStartMonth(fromMonth.atDay(1));
+            }
             entries.save(e);
         } else {
-            entries.save(newFixedEntry(userId, cat.getId(), amount, fromMonth));
+            YearMonth start = fromMonth != null ? fromMonth : viewMonth;
+            entries.save(newFixedEntry(userId, cat.getId(), amount, start));
         }
         return get(userId, viewMonth);
     }
@@ -151,6 +156,14 @@ public class ReservaService {
         return entries.findByUserIdAndCategoryId(userId, categoryId).stream()
                 .filter(e -> e.getRecurrence() == Recurrence.FIXO)
                 .findFirst();
+    }
+
+    /** Valor da reserva ativo no mes: 0 se o lancamento so comeca depois (mes inicial futuro). */
+    private BigDecimal activeAmount(Optional<Entry> entry, YearMonth month) {
+        return entry
+                .filter(e -> !YearMonth.from(e.getStartMonth()).isAfter(month))
+                .map(Entry::getAmount)
+                .orElse(ZERO);
     }
 
     /** Retorna a categoria especial de reserva, criando-a se nao existir (ex.: apos reset). */

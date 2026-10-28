@@ -39,7 +39,7 @@ public class ReservaController {
     public ReservaResponse set(@Valid @RequestBody ReservaRequest req,
                                @RequestParam(required = false) String month) {
         YearMonth view = month == null ? YearMonth.now(zone) : Months.parse(month);
-        YearMonth from = req.fromMonth() == null ? view : Months.parse(req.fromMonth());
+        YearMonth from = req.fromMonth() == null ? null : Months.parse(req.fromMonth());
         return service.set(AuthContext.currentUserId(), req.amount(), from, view);
     }
 
