@@ -71,20 +71,13 @@ public class ReservaService {
         return new ReservaStatus(reserva, days, remainingDays, spent, remainingMonth, daily);
     }
 
-    /**
-     * Lanca um gasto rapido (despesa UNICO na reserva). Retorna o status atualizado.
-     *
-     * @param credit true = credito (lanca no mes seguinte ao da data); false = debito (mes da data).
-     */
+    /** Lanca um gasto rapido (despesa UNICO na reserva) no mes informado. */
     @Transactional
-    public ReservaStatus quickGasto(Long userId, BigDecimal amount, LocalDate date,
-                                    String description, boolean credit) {
+    public void quickGasto(Long userId, BigDecimal amount, YearMonth target, String description) {
         if (amount == null || amount.signum() <= 0) {
             throw ApiException.badRequest("Valor do gasto deve ser maior que zero");
         }
         Category cat = requireReservaCategory(userId);
-        // Credito entra no mes seguinte (fatura); debito no mes da compra.
-        YearMonth target = credit ? YearMonth.from(date).plusMonths(1) : YearMonth.from(date);
 
         Entry e = new Entry();
         e.setUserId(userId);
@@ -97,9 +90,6 @@ public class ReservaService {
         e.setStartMonth(target.atDay(1));
         e.setEndMonth(target.atDay(1));
         entries.save(e);
-
-        // Status do mes onde o gasto caiu (credito: dia 1 do mes seguinte).
-        return status(userId, credit ? target.atDay(1) : date);
     }
 
     private BigDecimal spentInMonth(Long userId, Long categoryId, YearMonth month) {
